@@ -149,18 +149,20 @@ define("scripts/control.js", function(exports) {
       //   message.postMessage("click");
       hands.runDetection(handModel, video, detections => {
         if (detections[0]) {
-          const { bbox } = detections[0];
+          const { bbox, score } = detections[0];
+          console.log({ bbox, score });
           const [x, y, height, width] = bbox;
 
           // Canvas offset by -25% top and left
           const offsetX = gameBox.offsetWidth * 0.25;
           const offsetY = gameBox.offsetHeight * 0.25;
 
-          const midX = x - offsetX + width / 2;
-          const midY = y - offsetY + height / 2;
+          const midX = x - offsetX + width * 0.25;
+          const midY = y - offsetY;
 
-          if ((kf = knife.through(midX, midY)))
+          if ((kf = knife.through(midX, midY))) {
             message.postMessage(kf, "slice");
+          }
         }
       });
     }
@@ -8555,6 +8557,7 @@ define("scripts/object/knife.js", function(exports) {
   exports.through = function(x, y) {
     if (!switchState) return;
     var ret = null;
+    console.log("x and y of knife", x, y);
     if (lastX !== null && (lastX != x || lastY != y))
       new ClassKnifePart({ sx: lastX, sy: lastY, ex: x, ey: y }).set(),
         (ret = [lastX, lastY, x, y]);
