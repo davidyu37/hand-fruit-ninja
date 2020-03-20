@@ -14,8 +14,49 @@
   };
 })(this);
 
-const canvas = document.getElementById("canvas");
-const context = canvas.getContext("2d");
+let video = null;
+let poseNet = null;
+let poses = null;
+let recordScore = 0;
+
+function setup() {
+  console.log("p5 setup");
+  const videoWidth = 640;
+  const videoHeight = 480;
+
+  createCanvas(videoWidth, videoHeight);
+  video = createCapture(VIDEO);
+  video.size(width, height);
+
+  poseNet = ml5.poseNet(
+    video,
+    {
+      imageScaleFactor: 0.3,
+      outputStride: 16,
+      flipHorizontal: true,
+      minConfidence: 0.5,
+      maxPoseDetections: 5,
+      scoreThreshold: 0.5,
+      nmsRadius: 20,
+      detectionType: "single",
+      multiplier: 0.75
+    },
+    () => {
+      console.log("model loaded");
+      poseNet.on("pose", function(results) {
+        poses = results;
+      });
+    }
+  );
+
+  video.hide();
+}
+
+function draw() {
+  translate(width, 0);
+  scale(-1, 1);
+  image(video, 0, 0, width, height);
+}
 
 define("scripts/collide.js", function(exports) {
   var fruit = require("scripts/factory/fruit");
@@ -124,7 +165,7 @@ define("scripts/control.js", function(exports) {
   var knife = require("scripts/object/knife");
   var message = require("scripts/message");
   var state = require("scripts/state");
-  var hands = require("scripts/hands");
+  var pose = require("scripts/pose");
 
   var canvasLeft, canvasTop;
 
@@ -134,38 +175,46 @@ define("scripts/control.js", function(exports) {
     this.fixCanvasPos();
     this.installDragger();
     this.installClicker();
-    this.startHandDetection();
+    this.startPoseDetection();
   };
 
-  exports.startHandDetection = async function() {
-    const handModel = await hands.loadModel();
+  exports.startPoseDetection = async function() {
+    knife.newKnife();
+    message.postMessage("click");
+    console.log("start pose detection");
 
-    const video = await hands.startVideo();
+    setInterval(() => {
+      if (poses && poses[0]) {
+        const { pose } = poses[0];
 
-    if (document.readyState === "complete") {
-      knife.newKnife();
-      const gameBox = document.getElementById("extra");
+        const { leftWrist, rightWrist } = pose;
 
-      //   message.postMessage("click");
-      hands.runDetection(handModel, video, detections => {
-        if (detections[0]) {
-          const { bbox, score } = detections[0];
-          console.log({ bbox, score });
-          const [x, y, height, width] = bbox;
+        // console.log({ leftWrist, rightWrist });
 
-          // Canvas offset by -25% top and left
-          const offsetX = gameBox.offsetWidth * 0.25;
-          const offsetY = gameBox.offsetHeight * 0.25;
+        const {
+          x: rightWristX,
+          y: rightWristY,
+          confidence: rightWristConfidence
+        } = rightWrist;
+        const {
+          x: leftWristX,
+          y: leftWristY,
+          confidence: leftWristConfidence
+        } = leftWrist;
 
-          const midX = x - offsetX + width * 0.25;
-          const midY = y - offsetY;
-
-          if ((kf = knife.through(midX, midY))) {
+        if (rightWristConfidence > 0.3) {
+          if ((kf = knife.through(rightWristX, rightWristY, "rightWrist"))) {
             message.postMessage(kf, "slice");
           }
         }
-      });
-    }
+
+        if (leftWristConfidence > 0.3) {
+          if ((kf = knife.through(leftWristX, leftWristY, "leftWrist"))) {
+            message.postMessage(kf, "slice");
+          }
+        }
+      }
+    }, 10);
   };
 
   exports.installDragger = function() {
@@ -206,57 +255,40 @@ define("scripts/control.js", function(exports) {
   return exports;
 });
 
-define("scripts/hands.js", function(exports) {
+define("scripts/pose.js", function(exports) {
   exports.model = null;
   exports.video = null;
 
   exports.detectWidth = 640 * 1.5;
   exports.detectHeight = 480 * 1.5;
 
-  exports.loadModel = async function() {
-    const modelParams = {
-      flipHorizontal: true, // flip e.g for video
-      maxNumBoxes: 1, // maximum number of boxes to detect
-      iouThreshold: 0.5, // ioU threshold for non-max suppression
-      scoreThreshold: 0.8 // confidence threshold for predictions.
-    };
+  exports.loadModel = async function() {};
 
-    return new Promise((resolve, reject) => {
-      // Load the model.
-      handTrack.load(modelParams).then(model => {
-        // detect objects in the image.
-        console.log("model loaded");
-        if (!model) return reject();
-        resolve(model);
-      });
-    });
-  };
+  // exports.startVideo = async function() {
+  //   let stream = null;
 
-  exports.startVideo = async function() {
-    const video = document.createElement("video");
-    video.width = this.detectWidth;
-    video.height = this.detectHeight;
+  //   try {
+  //     stream = await navigator.mediaDevices.getUserMedia({
+  //       audio: true,
+  //       video: true
+  //     });
+  //     /* use the stream */
+  //     return stream;
+  //   } catch (err) {
+  //     /* handle the error */
+  //     console.log(err);
+  //   }
+  // };
 
-    return new Promise((resolve, reject) => {
-      handTrack.startVideo(video).then(function(status) {
-        if (status) {
-          resolve(video);
-        } else {
-          reject(false);
-        }
-      });
-    });
-  };
-
-  exports.runDetection = function(handModel, video, cb) {
-    handModel.detect(video).then(predictions => {
-      handModel.renderPredictions(predictions, canvas, context, video);
-      requestAnimationFrame(() => {
-        this.runDetection(handModel, video, cb);
-      });
-      cb(predictions);
-    });
-  };
+  // exports.runDetection = function(handModel, video, cb) {
+  //   handModel.detect(video).then(predictions => {
+  //     handModel.renderPredictions(predictions, canvas, context, video);
+  //     requestAnimationFrame(() => {
+  //       this.runDetection(handModel, video, cb);
+  //     });
+  //     cb(predictions);
+  //   });
+  // };
 
   return exports;
 });
@@ -385,6 +417,12 @@ define("scripts/game.js", function(exports) {
   message.addEventListener("game.over", function() {
     exports.gameOver();
     knife.switchOn();
+    console.log("game over");
+    setTimeout(() => {
+      state("click-enable").off();
+      gameOver.hide();
+      message.postMessage("home-menu", "sence.switchSence");
+    }, 3000);
   });
 
   message.addEventListener("overWhiteLight.show", function() {
@@ -763,7 +801,7 @@ define("scripts/sence.js", function(exports) {
     group.invoke("show");
     [peach, sandia].invoke("rotate", 2500);
 
-    menuSnd.play();
+    // menuSnd.play();
     setTimeout(callback, 2500);
   };
 
@@ -8483,8 +8521,9 @@ define("scripts/object/knife.js", function(exports) {
    * 刀光模块
    */
 
-  var lastX = null,
-    lastY = null;
+  // var lastX = null,
+  //   lastY = null;
+  var knives = {};
   var abs = Math.abs;
 
   var life = 200;
@@ -8551,19 +8590,24 @@ define("scripts/object/knife.js", function(exports) {
   };
 
   exports.newKnife = function() {
-    lastX = lastY = null;
+    knives = {};
   };
 
-  exports.through = function(x, y) {
+  exports.through = function(x, y, id) {
     if (!switchState) return;
     var ret = null;
-    console.log("x and y of knife", x, y);
+    console.log("x and y of knife", x, y, id);
+    if (!knives[id]) {
+      knives[id] = { x, y };
+    }
+
+    const { x: lastX, y: lastY } = knives[id];
+
     if (lastX !== null && (lastX != x || lastY != y))
       new ClassKnifePart({ sx: lastX, sy: lastY, ex: x, ey: y }).set(),
         (ret = [lastX, lastY, x, y]);
 
-    lastX = x;
-    lastY = y;
+    knives[id] = { x, y };
     return ret;
   };
 
@@ -9135,7 +9179,14 @@ define("scripts/object/score.js", function(exports) {
       .createText("default", "0", text1Sx, 24, "90-#fc7f0c-#ffec53", "30px")
       .hide();
     text2 = layer
-      .createText("default", "BEST 999", text2Sx, 48, "#af7c05", "14px")
+      .createText(
+        "default",
+        `BEST ${recordScore}`,
+        text2Sx,
+        48,
+        "#af7c05",
+        "14px"
+      )
       .hide();
   };
 
@@ -9166,6 +9217,10 @@ define("scripts/object/score.js", function(exports) {
   };
 
   exports.number = function(number) {
+    if (number > recordScore) {
+      recordScore = number;
+      text2.attr("text", `BEST ${number}`);
+    }
     text1.attr("text", number || 0);
     image.scale(1.2, 1.2);
     setTimeout(function() {
