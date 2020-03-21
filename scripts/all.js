@@ -160,6 +160,8 @@ define("scripts/collide.js", function(exports) {
  * @source D:\hosting\demos\fruit-ninja\output\scripts\control.js
  */
 
+var mute = false;
+
 define("scripts/control.js", function(exports) {
   var Ucren = require("scripts/lib/ucren");
   var knife = require("scripts/object/knife");
@@ -176,6 +178,20 @@ define("scripts/control.js", function(exports) {
     this.installDragger();
     this.installClicker();
     this.startPoseDetection();
+    this.controlPanel();
+  };
+
+  exports.controlPanel = function() {
+    const soundBtn = document.getElementById("sound-btn");
+    soundBtn.addEventListener("click", () => {
+      mute = !mute;
+      if (mute) {
+        soundBtn.innerHTML = "Unmute";
+      } else {
+        soundBtn.innerHTML = "Mute";
+      }
+      console.log("mute or not", mute);
+    });
   };
 
   exports.startPoseDetection = async function() {
@@ -188,8 +204,6 @@ define("scripts/control.js", function(exports) {
         const { pose } = poses[0];
 
         const { leftWrist, rightWrist } = pose;
-
-        // console.log({ leftWrist, rightWrist });
 
         const {
           x: rightWristX,
@@ -1977,8 +1991,9 @@ define("scripts/lib/buzz.js", function(exports) {
         if (!supported) {
           return this;
         }
-
-        this.sound.play();
+        if (!mute) {
+          this.sound.play();
+        }
         return this;
       };
 
@@ -8596,7 +8611,6 @@ define("scripts/object/knife.js", function(exports) {
   exports.through = function(x, y, id) {
     if (!switchState) return;
     var ret = null;
-    console.log("x and y of knife", x, y, id);
     if (!knives[id]) {
       knives[id] = { x, y };
     }
@@ -8649,6 +8663,7 @@ define("scripts/object/light.js", function(exports) {
   var Ucren = require("scripts/lib/ucren");
   var timeline = require("scripts/timeline");
   var message = require("scripts/message");
+  var lose = require("scripts/object/lose");
 
   var random = Ucren.randomNumber;
   var pi = Math.PI;
@@ -8698,6 +8713,7 @@ define("scripts/object/light.js", function(exports) {
       onTimeEnd: function() {
         mask.remove();
         message.postMessage("game.over");
+        lose.resetNumber();
       }
     };
 
@@ -8793,6 +8809,10 @@ define("scripts/object/lose.js", function(exports) {
 
   var number = 0;
 
+  exports.resetNumber = function() {
+    number = 0;
+  };
+
   exports.anims = [];
 
   exports.set = function() {
@@ -8864,7 +8884,6 @@ define("scripts/object/lose.js", function(exports) {
       .attr("src", infx[1].src.replace("x.png", "xf.png"))
       .scale(1e-5, 1e-5);
     this.scaleImage(infx[0]);
-
     if (number == 3) (number = 0), message.postMessage("game.over");
   };
 

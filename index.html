@@ -19,12 +19,6 @@
       </script><!
     [endif]-->
     <style>
-      #defaultCanvas0 {
-        z-index: 99;
-        opacity: 0.5;
-        position: relative;
-        top: -40px;
-      }
       html,
       body {
         height: 100%;
@@ -34,15 +28,28 @@
         margin: 0;
         display: flex;
 
-        /* This centers our sketch horizontally. */
         justify-content: center;
 
-        /* This centers our sketch vertically. */
         align-items: center;
+      }
+
+      #defaultCanvas0 {
+        z-index: 99;
+        opacity: 0.5;
+        position: relative;
+        top: -40px;
+      }
+
+      #control-panel {
+        position: fixed;
+        top: 0;
       }
     </style>
   </head>
   <body>
+    <div id="control-panel">
+      <button id="sound-btn">Mute</button>
+    </div>
     <div id="extra">
       <canvas id="canvas" class="border canvasbox"></canvas>
     </div>
