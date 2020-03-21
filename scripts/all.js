@@ -16,7 +16,7 @@
 
 let video = null;
 let poseNet = null;
-let poses = null;
+let poses = [];
 let recordScore = 0;
 
 function setup() {
@@ -39,7 +39,7 @@ function setup() {
       scoreThreshold: 0.5,
       nmsRadius: 20,
       detectionType: "single",
-      multiplier: 0.75
+      multiplier: 1.0
     },
     () => {
       console.log("model loaded");
@@ -53,9 +53,67 @@ function setup() {
 }
 
 function draw() {
-  translate(width, 0);
-  scale(-1, 1);
-  image(video, 0, 0, width, height);
+  clear();
+  if (showWebcam) {
+    push();
+    translate(width, 0);
+    scale(-1, 1);
+    image(video, 0, 0, width, height);
+    pop();
+  }
+  if (showSkeleton) {
+    drawKeypoints();
+    drawSkeleton();
+  }
+}
+
+function drawKeypoints() {
+  const exclude = {
+    nose: true,
+    leftEye: true,
+    rightEye: true,
+    leftEar: true,
+    rightEar: true
+  };
+  // Loop through all the poses detected
+  for (let i = 0; i < poses.length; i++) {
+    // For each pose detected, loop through all the keypoints
+    let pose = poses[i].pose;
+    for (let j = 0; j < pose.keypoints.length; j++) {
+      // A keypoint is an object describing a body part (like rightArm or leftShoulder)
+      let keypoint = pose.keypoints[j];
+
+      if (exclude[keypoint.part]) return;
+
+      // Only draw an ellipse is the pose probability is bigger than 0.2
+      if (keypoint.score > 0.2) {
+        fill(255, 0, 0);
+        noStroke();
+        ellipse(keypoint.position.x, keypoint.position.y, 10, 10);
+      }
+    }
+  }
+}
+
+// A function to draw the skeletons
+function drawSkeleton() {
+  // Loop through all the skeletons detected
+  for (let i = 0; i < poses.length; i++) {
+    let skeleton = poses[i].skeleton;
+    // For every skeleton, loop through all body connections
+    for (let j = 0; j < skeleton.length; j++) {
+      let partA = skeleton[j][0];
+      let partB = skeleton[j][1];
+      stroke(255, 0, 0);
+      strokeWeight(4);
+      line(
+        partA.position.x,
+        partA.position.y,
+        partB.position.x,
+        partB.position.y
+      );
+    }
+  }
 }
 
 define("scripts/collide.js", function(exports) {
@@ -161,6 +219,8 @@ define("scripts/collide.js", function(exports) {
  */
 
 var mute = false;
+var showWebcam = false;
+var showSkeleton = false;
 
 define("scripts/control.js", function(exports) {
   var Ucren = require("scripts/lib/ucren");
@@ -190,13 +250,31 @@ define("scripts/control.js", function(exports) {
       } else {
         soundBtn.innerHTML = "Mute";
       }
-      console.log("mute or not", mute);
+    });
+    const webcamBtn = document.getElementById("webcam-btn");
+    webcamBtn.addEventListener("click", () => {
+      showWebcam = !showWebcam;
+      if (showWebcam) {
+        webcamBtn.innerHTML = "Hide Webcam";
+      } else {
+        webcamBtn.innerHTML = "Show Webcam";
+      }
+    });
+
+    const skeletonBtn = document.getElementById("skeleton-btn");
+    skeletonBtn.addEventListener("click", () => {
+      showSkeleton = !showSkeleton;
+      if (showSkeleton) {
+        skeletonBtn.innerHTML = "Hide skeleton";
+      } else {
+        skeletonBtn.innerHTML = "Show skeleton";
+      }
     });
   };
 
   exports.startPoseDetection = async function() {
     knife.newKnife();
-    message.postMessage("click");
+    // message.postMessage("click");
     console.log("start pose detection");
 
     setInterval(() => {
@@ -430,8 +508,8 @@ define("scripts/game.js", function(exports) {
 
   message.addEventListener("game.over", function() {
     exports.gameOver();
+    knife.newKnife();
     knife.switchOn();
-    console.log("game over");
     setTimeout(() => {
       state("click-enable").off();
       gameOver.hide();
