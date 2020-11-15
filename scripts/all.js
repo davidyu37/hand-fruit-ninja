@@ -18,6 +18,7 @@ let video = null;
 let poseNet = null;
 let poses = [];
 let recordScore = 0;
+let modelLoading = true;
 
 function setup() {
   console.log("p5 setup");
@@ -43,6 +44,7 @@ function setup() {
     },
     () => {
       console.log("model loaded");
+      modelLoading = false;
       poseNet.on("pose", function(results) {
         poses = results;
       });
@@ -54,6 +56,11 @@ function setup() {
 
 function draw() {
   clear();
+  if(modelLoading) {
+    textSize(28);
+    text('Please wait a few seconds while Posenet loads...', 10, 30);
+    fill(255, 255, 255);
+  }
   if (showWebcam) {
     push();
     translate(width, 0);
